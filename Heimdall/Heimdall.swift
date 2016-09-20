@@ -1,7 +1,7 @@
 //
 //  Heimdall.swift
 //
-//  Heimdall - The gatekeeper of Bifrost, the road connecting the 
+//  Heimdall - The gatekeeper of Bifrost, the road connecting the
 //  world (Midgard) to Asgard, home of the Norse gods.
 //
 //  In iOS, Heimdall is the gatekeeper to the Keychain, offering
@@ -42,7 +42,7 @@ public class Heimdall {
     private var privateTag: String?
     private var scope: ScopeOptions
     
-    /// 
+    ///
     /// Create an instance with data for the public key,
     /// the keychain is updated with the tag given (call .destroy() to remove)
     ///
@@ -115,7 +115,7 @@ public class Heimdall {
     ///
     public convenience init?(publicTag: String, privateTag: String, keySize: Int = 2048) {
         self.init(scope: ScopeOptions.All, publicTag: publicTag, privateTag: privateTag)
-
+        
         if Heimdall.obtainKey(publicTag) == nil || Heimdall.obtainKey(privateTag) == nil {
             if Heimdall.generateKeyPair(publicTag, privateTag: privateTag, keySize: keySize) == nil {
                 return nil
@@ -132,6 +132,13 @@ public class Heimdall {
     //
     //  MARK: Public functions
     //
+    
+    ///
+    /// - returns: Public key data
+    ///
+    public func publicKeyData() -> NSData? {
+        return obtainKeyData(.Public)
+    }
     
     ///
     /// - returns: Public key in X.509 format
@@ -156,10 +163,32 @@ public class Heimdall {
     }
     
     ///
-    /// - returns: Public key data
+    /// - returns: Private key data
     ///
-    public func publicKeyData() -> NSData? {
-        return obtainKeyData(.Public)
+    public func privateKeyData() -> NSData? {
+        return obtainKeyData(.Private)
+    }
+    
+    ///
+    /// - returns: Private key in X.509 format
+    ///
+    public func privateKeyDataX509() -> NSData? {
+        if let keyData = obtainKeyData(.Private) {
+            return keyData.dataByPrependingX509Header()
+        }
+        
+        return nil
+    }
+    
+    ///
+    /// - returns: Private key components (modulus and exponent)
+    ///
+    public func privateKeyComponents() -> (modulus: NSData, exponent: NSData)? {
+        if let keyData = obtainKeyData(.Private), (modulus, exponent) = keyData.splitIntoComponents() {
+            return (modulus, exponent)
+        }
+        
+        return nil
     }
     
     ///
@@ -317,7 +346,7 @@ public class Heimdall {
                     // We can now extract the key and the IV
                     let decryptedKey = decryptedMetadata.subdataWithRange(NSRange(location: 0, length: keySize))
                     let decryptedIv = decryptedMetadata.subdataWithRange(NSRange(location: keySize, length: ivSize))
-
+                    
                     if let message = Heimdall.decrypt(messageData, key: decryptedKey, iv: decryptedIv, algorithm: algorithm) {
                         return message
                     }
@@ -408,7 +437,7 @@ public class Heimdall {
             string = string.stringByReplacingOccurrencesOfString("_", withString: "/")
             string = string.stringByReplacingOccurrencesOfString("-", withString: "+")
         }
-
+        
         if let data = message.dataUsingEncoding(NSUTF8StringEncoding, allowLossyConversion: false), signature = NSData(base64EncodedString: string, options: NSDataBase64DecodingOptions(rawValue: 0)) {
             return self.verify(data, signatureData: signature)
         }
@@ -558,7 +587,7 @@ public class Heimdall {
             String(kSecReturnRef): kCFBooleanTrue as CFBoolean,
             String(kSecClass): kSecClassKey as CFStringRef,
             String(kSecAttrApplicationTag): tag as CFStringRef,
-        ]
+            ]
         
         let status = SecItemCopyMatching(query, &keyRef)
         
@@ -581,7 +610,7 @@ public class Heimdall {
             String(kSecReturnData): kCFBooleanTrue as CFBoolean,
             String(kSecClass): kSecClassKey as CFStringRef,
             String(kSecAttrApplicationTag): tag as CFStringRef,
-        ]
+            ]
         
         let result: NSData?
         
@@ -646,14 +675,14 @@ public class Heimdall {
         var publicRef: SecKey?
         var privateRef: SecKey?
         switch SecKeyGeneratePair(pairAttributes, &publicRef, &privateRef) {
-            case noErr:
-                if let publicKey = publicRef, privateKey = privateRef {
-                    return (publicKey, privateKey)
-                }
-                
-                return nil
-            default:
-                return nil
+        case noErr:
+            if let publicKey = publicRef, privateKey = privateRef {
+                return (publicKey, privateKey)
+            }
+            
+            return nil
+        default:
+            return nil
         }
     }
     
@@ -730,7 +759,7 @@ public class Heimdall {
                 return result
             }
         }
-
+        
         return nil
     }
 }
@@ -853,7 +882,7 @@ private extension NSData {
         // Get the bytes from the keyData
         let pointer = UnsafePointer<CUnsignedChar>(self.bytes)
         let keyBytes = [CUnsignedChar](UnsafeBufferPointer<CUnsignedChar>(start:pointer, count:self.length / sizeof(CUnsignedChar)))
-
+        
         // Assumption is that the data is in DER encoding
         // If we can parse it, then return successfully
         var i: NSInteger = 0
@@ -864,7 +893,7 @@ private extension NSData {
         } else {
             i += 1
         }
-
+        
         // Total length of the container
         if let _ = NSInteger(octetBytes: keyBytes, startIdx: &i) {
             // First component is the modulus
@@ -896,7 +925,7 @@ private extension NSData {
         
         let encodingLength: Int = (self.length + 1).encodedOctets().count
         let OID: [CUnsignedChar] = [0x30, 0x0d, 0x06, 0x09, 0x2a, 0x86, 0x48, 0x86,
-            0xf7, 0x0d, 0x01, 0x01, 0x01, 0x05, 0x00]
+                                    0xf7, 0x0d, 0x01, 0x01, 0x01, 0x05, 0x00]
         
         var builder: [CUnsignedChar] = []
         
@@ -937,7 +966,7 @@ private extension NSData {
             let _ = NSInteger(octetBytes: bytes, startIdx: &offset)
             
             let OID: [CUnsignedChar] = [0x30, 0x0d, 0x06, 0x09, 0x2a, 0x86, 0x48, 0x86,
-                0xf7, 0x0d, 0x01, 0x01, 0x01, 0x05, 0x00]
+                                        0xf7, 0x0d, 0x01, 0x01, 0x01, 0x05, 0x00]
             let slice: [CUnsignedChar] = Array(bytes[offset..<(offset + OID.count)])
             
             if slice == OID {
