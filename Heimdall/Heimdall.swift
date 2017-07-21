@@ -71,7 +71,7 @@ public class Heimdall {
         }
     }
     
-    public func resaveKeyWithAfterFirstLockAccessibility() -> Bool {
+    public func updateKeyAccessibility() -> Bool {
     
         if let existingData = Heimdall.obtainKeyData(publicTag) {
             
