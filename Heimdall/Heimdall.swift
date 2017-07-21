@@ -71,6 +71,16 @@ public class Heimdall {
         }
     }
     
+    public func resaveKey() -> Bool {
+    
+        if let existingData = Heimdall.obtainKeyData(publicTag) {
+            
+            return Heimdall.updateKey(publicTag, data: existingData)
+        }
+        
+        return true
+    }
+    
     ///
     /// Create an instance with the modulus and exponent of the public key
     /// the resulting key is added to the keychain (call .destroy() to remove)
