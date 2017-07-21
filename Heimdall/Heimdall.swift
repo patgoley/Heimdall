@@ -71,11 +71,16 @@ public class Heimdall {
         }
     }
     
-    public func resaveKey() -> Bool {
+    public func resaveKeyWithAfterFirstLockAccessibility() -> Bool {
     
         if let existingData = Heimdall.obtainKeyData(publicTag) {
             
-            return Heimdall.updateKey(publicTag, data: existingData)
+            let attributes: [String: AnyObject] = [
+                String(kSecValueData): existingData,
+                String(kSecAttrAccessible): String(kSecAttrAccessibleAfterFirstUnlock)
+            ]
+            
+            return Heimdall.updateKeyAttributes(publicTag, newAttributes: attributes)
         }
         
         return true
@@ -638,10 +643,19 @@ public class Heimdall {
         let query: Dictionary<String, AnyObject> = [
             String(kSecAttrKeyType): kSecAttrKeyTypeRSA,
             String(kSecClass): kSecClassKey as CFStringRef,
-            String(kSecAttrApplicationTag): tag as CFStringRef,
-            String(kSecAttrAccessible): String(kSecAttrAccessibleAfterFirstUnlock)]
+            String(kSecAttrApplicationTag): tag as CFStringRef]
         
         return SecItemUpdate(query, [String(kSecValueData): data]) == noErr
+    }
+    
+    private class func updateKeyAttributes(tag: String, newAttributes: [String: AnyObject]) -> Bool {
+        
+        let query: Dictionary<String, AnyObject> = [
+            String(kSecAttrKeyType): kSecAttrKeyTypeRSA,
+            String(kSecClass): kSecClassKey as CFStringRef,
+            String(kSecAttrApplicationTag): tag as CFStringRef]
+        
+        return SecItemUpdate(query, newAttributes) == noErr
     }
     
     private class func deleteKey(tag: String) -> Bool {
