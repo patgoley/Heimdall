@@ -628,7 +628,8 @@ public class Heimdall {
         let query: Dictionary<String, AnyObject> = [
             String(kSecAttrKeyType): kSecAttrKeyTypeRSA,
             String(kSecClass): kSecClassKey as CFStringRef,
-            String(kSecAttrApplicationTag): tag as CFStringRef]
+            String(kSecAttrApplicationTag): tag as CFStringRef,
+            String(kSecAttrAccessible): String(kSecAttrAccessibleAfterFirstUnlock)]
         
         return SecItemUpdate(query, [String(kSecValueData): data]) == noErr
     }
@@ -649,6 +650,7 @@ public class Heimdall {
         publicAttributes[String(kSecAttrApplicationTag)] = publicTag as CFStringRef
         publicAttributes[String(kSecValueData)] = data as CFDataRef
         publicAttributes[String(kSecReturnPersistentRef)] = true as CFBooleanRef
+        publicAttributes[String(kSecAttrAccessible)] = String(kSecAttrAccessibleAfterFirstUnlock)
         
         var persistentRef: AnyObject?
         let status = SecItemAdd(publicAttributes, &persistentRef)
@@ -663,14 +665,17 @@ public class Heimdall {
     
     private class func generateKeyPair(publicTag: String, privateTag: String, keySize: Int) -> (publicKey: SecKeyRef, privateKey: SecKeyRef)? {
         let privateAttributes = [String(kSecAttrIsPermanent): true,
-                                 String(kSecAttrApplicationTag): privateTag]
+                                 String(kSecAttrApplicationTag): privateTag,
+                                 String(kSecAttrAccessible): String(kSecAttrAccessibleAfterFirstUnlock)]
         let publicAttributes = [String(kSecAttrIsPermanent): true,
-                                String(kSecAttrApplicationTag): publicTag]
+                                String(kSecAttrApplicationTag): publicTag,
+                                String(kSecAttrAccessible): String(kSecAttrAccessibleAfterFirstUnlock)]
         
         let pairAttributes = [String(kSecAttrKeyType): kSecAttrKeyTypeRSA,
                               String(kSecAttrKeySizeInBits): keySize,
                               String(kSecPublicKeyAttrs): publicAttributes,
-                              String(kSecPrivateKeyAttrs): privateAttributes]
+                              String(kSecPrivateKeyAttrs): privateAttributes,
+                              String(kSecAttrAccessible): String(kSecAttrAccessibleAfterFirstUnlock)]
         
         var publicRef: SecKey?
         var privateRef: SecKey?
