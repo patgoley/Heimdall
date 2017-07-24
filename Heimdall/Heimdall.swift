@@ -114,6 +114,8 @@ public class Heimdall {
             
             let currentAccessibility = existingAttributes[accessibilityKey] as? String
             
+            print("current: \(currentAccessibility)")
+            
             if currentAccessibility == nil || currentAccessibility != String(kSecAttrAccessibleAfterFirstUnlock) {
                 
                 if let existingKeyData = Heimdall.obtainKeyData(tag) {
