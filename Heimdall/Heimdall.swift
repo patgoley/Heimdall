@@ -97,37 +97,21 @@ public class Heimdall {
         return true
     }
     
-    public func updateKeyPairAccessibilityIfNeeded() -> Bool {
-        
-        let publicSuccess = updateKeyAccessibilityIfNeeded(publicTag)
-        
-        let privateSuccess = privateTag.flatMap(updateKeyAccessibilityIfNeeded) ?? true
-        
-        return publicSuccess && privateSuccess
-    }
-    
-    public func updateKeyAccessibilityIfNeeded(tag: String) -> Bool {
+    public func needsAccessibilityUpdateIfNeeded() -> Bool {
         
         let accessibilityKey = String(kSecAttrAccessible)
         
-        if let existingAttributes = Heimdall.obtainKeyAttributes(tag) {
+        if let existingAttributes = Heimdall.obtainKeyAttributes(publicTag) {
             
             let currentAccessibility = existingAttributes[accessibilityKey] as? String
             
-            print("current: \(currentAccessibility)")
-            
             if currentAccessibility == nil || currentAccessibility != String(kSecAttrAccessibleAfterFirstUnlock) {
                 
-                if let existingKeyData = Heimdall.obtainKeyData(tag) {
-                    
-                    Heimdall.deleteKey(tag)
-                    
-                    return Heimdall.insertKey(tag, data: existingKeyData) != nil
-                }
+                return true
             }
         }
         
-        return true
+        return false
     }
     
     ///
