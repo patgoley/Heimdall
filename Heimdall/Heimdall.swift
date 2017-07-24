@@ -83,6 +83,48 @@ public class Heimdall {
             return Heimdall.updateKeyAttributes(publicTag, newAttributes: attributes)
         }
         
+        if let privateTag = self.privateTag,
+           let existingData = Heimdall.obtainKeyData(privateTag) {
+            
+            let attributes: [String: AnyObject] = [
+                String(kSecValueData): existingData,
+                String(kSecAttrAccessible): String(kSecAttrAccessibleAfterFirstUnlock)
+            ]
+            
+            return Heimdall.updateKeyAttributes(privateTag, newAttributes: attributes)
+        }
+        
+        return true
+    }
+    
+    public func updateKeyPairAccessibilityIfNeeded() -> Bool {
+        
+        let publicSuccess = updateKeyAccessibilityIfNeeded(publicTag)
+        
+        let privateSuccess = privateTag.flatMap(updateKeyAccessibilityIfNeeded) ?? true
+        
+        return publicSuccess && privateSuccess
+    }
+    
+    public func updateKeyAccessibilityIfNeeded(tag: String) -> Bool {
+        
+        let accessibilityKey = String(kSecAttrAccessible)
+        
+        if let existingAttributes = Heimdall.obtainKeyAttributes(tag) {
+            
+            let currentAccessibility = existingAttributes[accessibilityKey] as? String
+            
+            if currentAccessibility == nil || currentAccessibility != String(kSecAttrAccessibleAfterFirstUnlock) {
+                
+                if let existingKeyData = Heimdall.obtainKeyData(tag) {
+                    
+                    Heimdall.deleteKey(tag)
+                    
+                    return Heimdall.insertKey(tag, data: existingKeyData) != nil
+                }
+            }
+        }
+        
         return true
     }
     
@@ -590,6 +632,7 @@ public class Heimdall {
         
         return nil
     }
+
     
     //
     //  MARK: Private class functions
@@ -632,6 +675,29 @@ public class Heimdall {
         switch SecItemCopyMatching(query, &keyRef) {
         case noErr:
             result = keyRef as? NSData
+        default:
+            result = nil
+        }
+        
+        return result
+    }
+    
+    private class func obtainKeyAttributes(tag: String) -> NSDictionary? {
+        var attrRef: AnyObject?
+        let query: Dictionary<String, AnyObject> = [
+            String(kSecAttrKeyType): kSecAttrKeyTypeRSA,
+            String(kSecReturnAttributes): kCFBooleanTrue as CFBoolean,
+            String(kSecClass): kSecClassKey as CFStringRef,
+            String(kSecAttrApplicationTag): tag as CFStringRef,
+            ]
+        
+        let result: NSDictionary?
+        
+        switch SecItemCopyMatching(query, &attrRef) {
+        case noErr:
+            let cfDictionary = attrRef as! CFDictionary
+            result = cfDictionary as NSDictionary
+            
         default:
             result = nil
         }
@@ -684,6 +750,25 @@ public class Heimdall {
         }
         
         return Heimdall.obtainKey(publicTag)
+    }
+    
+    private class func insertKey(tag: String, data: NSData) -> SecKeyRef? {
+        var publicAttributes = Dictionary<String, AnyObject>()
+        publicAttributes[String(kSecAttrKeyType)] = kSecAttrKeyTypeRSA
+        publicAttributes[String(kSecClass)] = kSecClassKey as CFStringRef
+        publicAttributes[String(kSecAttrApplicationTag)] = tag as CFStringRef
+        publicAttributes[String(kSecValueData)] = data as CFDataRef
+        publicAttributes[String(kSecReturnPersistentRef)] = true as CFBooleanRef
+        publicAttributes[String(kSecAttrAccessible)] = String(kSecAttrAccessibleAfterFirstUnlock)
+        
+        var persistentRef: AnyObject?
+        let status = SecItemAdd(publicAttributes, &persistentRef)
+        
+        if status != noErr && status != errSecDuplicateItem {
+            return nil
+        }
+        
+        return Heimdall.obtainKey(tag)
     }
     
     
