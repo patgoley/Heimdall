@@ -97,7 +97,7 @@ public class Heimdall {
         return true
     }
     
-    public func needsAccessibilityUpdateIfNeeded() -> Bool {
+    public func needsAccessibilityUpdate() -> Bool {
         
         let accessibilityKey = String(kSecAttrAccessible)
         
