@@ -1,7 +1,7 @@
 //
 //  Heimdall.swift
 //
-//  Heimdall - The gatekeeper of Bifrost, the road connecting the 
+//  Heimdall - The gatekeeper of Bifrost, the road connecting the
 //  world (Midgard) to Asgard, home of the Norse gods.
 //
 //  In iOS, Heimdall is the gatekeeper to the Keychain, offering
@@ -57,21 +57,66 @@ open class Heimdall {
         if let existingData = Heimdall.obtainKeyData(publicTag) {
             // Compare agains the new data (optional)
             if let newData = publicKeyData?.dataByStrippingX509Header() , (existingData != newData) {
-                if !Heimdall.updateKey(publicTag, data: newData) {
+                if !Heimdall.updateKey(tag: publicTag, data: newData) {
                     // Failed to update the key, fail the initialisation
                     return nil
                 }
             }
             
-            self.init(scope: ScopeOptions.PublicKey, publicTag: publicTag, privateTag: nil)
+            self.init(scope: ScopeOptions.publicKey, publicTag: publicTag, privateTag: nil)
         } else if let data = publicKeyData?.dataByStrippingX509Header(), let _ = Heimdall.insertPublicKey(publicTag, data: data) {
             // Successfully created the new key
-            self.init(scope: ScopeOptions.PublicKey, publicTag: publicTag, privateTag: nil)
+            self.init(scope: ScopeOptions.publicKey, publicTag: publicTag, privateTag: nil)
         } else {
             // Call the init, although returning nil
-            self.init(scope: ScopeOptions.PublicKey, publicTag: publicTag, privateTag: nil)
+            self.init(scope: ScopeOptions.publicKey, publicTag: publicTag, privateTag: nil)
             return nil
         }
+    }
+    
+    public func updateKeyAccessibility() -> Bool {
+    
+        if let existingData = Heimdall.obtainKeyData(publicTag) {
+            
+            let attributes: [String: AnyObject] = [
+                String(kSecValueData): existingData as NSData,
+                String(kSecAttrAccessible): kSecAttrAccessibleAfterFirstUnlock
+            ]
+            
+            return Heimdall.updateKeyAttributes(tag: publicTag, newAttributes: attributes)
+        }
+        
+        if let privateTag = self.privateTag,
+           let existingData = Heimdall.obtainKeyData(privateTag) {
+            
+            let attributes: [String: AnyObject] = [
+                String(kSecValueData): existingData as NSData,
+                String(kSecAttrAccessible): kSecAttrAccessibleAfterFirstUnlock
+            ]
+            
+            return Heimdall.updateKeyAttributes(tag: privateTag, newAttributes: attributes)
+        }
+        
+        return true
+    }
+    
+    public func needsAccessibilityUpdate() -> Bool {
+        
+        let accessibilityKey = String(kSecAttrAccessible)
+        
+        if let existingAttributes = Heimdall.obtainKeyAttributes(tag: publicTag) {
+            
+            let currentAccessibility = existingAttributes[accessibilityKey] as? String
+            
+            let afterFirstUnlock = kSecAttrAccessibleAfterFirstUnlock as String
+            
+            if currentAccessibility == nil || currentAccessibility != afterFirstUnlock {
+                
+                return true
+            }
+        }
+        
+        return false
     }
     
     ///
@@ -117,10 +162,10 @@ open class Heimdall {
     /// - returns: Heimdall instance ready for both public and private key operations
     ///
     public convenience init?(publicTag: String, privateTag: String, keySize: Int = 2048) {
-        self.init(scope: ScopeOptions.All, publicTag: publicTag, privateTag: privateTag)
+        self.init(scope: ScopeOptions.all, publicTag: publicTag, privateTag: privateTag)
 
         if Heimdall.obtainKey(publicTag) == nil || Heimdall.obtainKey(privateTag) == nil {
-            if Heimdall.generateKeyPair(publicTag, privateTag: privateTag, keySize: keySize) == nil {
+            if Heimdall.generateKeyPair(publicTag: publicTag, privateTag: privateTag, keySize: keySize) == nil {
                 return nil
             }
         }
@@ -159,10 +204,36 @@ open class Heimdall {
     }
     
     ///
-    /// - returns: Public key data
+    /// - returns: Private key data
     ///
     open func publicKeyData() -> Data? {
         return obtainKeyData(.public)
+    }
+    
+    open func privateKeyData() -> Data? {
+        return obtainKeyData(.private)
+    }
+    
+    ///
+    /// - returns: Private key in X.509 format
+    ///
+    public func privateKeyDataX509() -> Data? {
+        if let keyData = obtainKeyData(.private) {
+            return keyData.dataByPrependingX509Header()
+        }
+        
+        return nil
+    }
+    
+    ///
+    /// - returns: Private key components (modulus and exponent)
+    ///
+    public func privateKeyComponents() -> (modulus: Data, exponent: Data)? {
+        if let keyData = obtainKeyData(.private), let (modulus, exponent) = keyData.splitIntoComponents() {
+            return (modulus, exponent)
+        }
+        
+        return nil
     }
     
     ///
@@ -180,7 +251,7 @@ open class Heimdall {
         if let data = string.data(using: String.Encoding.utf8, allowLossyConversion: false), let encrypted = self.encrypt(data) {
             
             // Convert to a string
-            var resultString = encrypted.base64EncodedString(options: NSData.Base64EncodingOptions(rawValue: 0))
+            var resultString = encrypted.base64EncodedString(options: Data.Base64EncodingOptions(rawValue: 0))
             
             if urlEncode {
                 resultString = resultString.replacingOccurrences(of: "/", with: "_")
@@ -231,7 +302,7 @@ open class Heimdall {
                 var encryptedLength = blockSize
                 var encryptedData = [UInt8](repeating: 0, count: encryptedLength)
                 
-                var rawKeyIVData = NSData(data: aesKey) as Data
+                var rawKeyIVData = aesKey
                 rawKeyIVData.append(iv)
                 
                 
@@ -274,7 +345,7 @@ open class Heimdall {
             string = string.replacingOccurrences(of: "-", with: "+")
         }
         
-        if let data = Data(base64Encoded: string, options: NSData.Base64DecodingOptions(rawValue: 0)), let decryptedData = self.decrypt(data) {
+        if let data = Data(base64Encoded: string, options: Data.Base64DecodingOptions(rawValue: 0)), let decryptedData = self.decrypt(data) {
             return NSString(data: decryptedData, encoding: String.Encoding.utf8.rawValue) as String?
         }
         
@@ -350,7 +421,7 @@ open class Heimdall {
     open func sign(_ string: String, urlEncode: Bool = false) -> String? {
         if let data = string.data(using: String.Encoding.utf8, allowLossyConversion: false), let signatureData = self.sign(data) {
             
-            var signature = signatureData.base64EncodedString(options: NSData.Base64EncodingOptions(rawValue: 0))
+            var signature = signatureData.base64EncodedString(options: Data.Base64EncodingOptions(rawValue: 0))
             
             if urlEncode {
                 signature = signature.replacingOccurrences(of: "/", with: "_")
@@ -369,7 +440,7 @@ open class Heimdall {
     /// - parameters:
     ///     - data: Data to sign
     ///
-    /// - returns: Signature as NSData
+    /// - returns: Signature as Data
     ///
     open func sign(_ data: Data) -> Data? {
         if let key = obtainKey(.private), let hash = NSMutableData(length: Int(CC_SHA256_DIGEST_LENGTH)) {
@@ -419,7 +490,7 @@ open class Heimdall {
             string = string.replacingOccurrences(of: "-", with: "+")
         }
 
-        if let data = message.data(using: String.Encoding.utf8, allowLossyConversion: false), let signature = Data(base64Encoded: string, options: NSData.Base64DecodingOptions(rawValue: 0)) {
+        if let data = message.data(using: String.Encoding.utf8, allowLossyConversion: false), let signature = Data(base64Encoded: string, options: Data.Base64DecodingOptions(rawValue: 0)) {
             return self.verify(data, signatureData: signature)
         }
         
@@ -466,11 +537,11 @@ open class Heimdall {
     /// - returns: True if remove successfully
     ///
     @discardableResult open func destroy() -> Bool {
-        if Heimdall.deleteKey(self.publicTag) {
-            self.scope = self.scope & ~(ScopeOptions.PublicKey)
+        if Heimdall.deleteKey(tag: self.publicTag) {
+            self.scope = self.scope & ~(ScopeOptions.publicKey)
             
-            if let privateTag = self.privateTag , Heimdall.deleteKey(privateTag) {
-                self.scope = self.scope & ~(ScopeOptions.PrivateKey)
+            if let privateTag = self.privateTag , Heimdall.deleteKey(tag: privateTag) {
+                self.scope = self.scope & ~(ScopeOptions.privateKey)
                 return true
             }
             
@@ -493,14 +564,14 @@ open class Heimdall {
     ///
     @discardableResult open func regenerate(_ keySize: Int = 2048) -> Bool {
         // Only if we currently have a private key in our control (or we think we have one)
-        if self.scope & ScopeOptions.PrivateKey != ScopeOptions.PrivateKey {
+        if self.scope & ScopeOptions.privateKey != ScopeOptions.privateKey {
             return false
         }
         
         if let privateTag = self.privateTag , self.destroy() {
-            if Heimdall.generateKeyPair(self.publicTag, privateTag: privateTag, keySize: keySize) != nil {
+            if Heimdall.generateKeyPair(publicTag: self.publicTag, privateTag: privateTag, keySize: keySize) != nil {
                 // Restore our scope back to .All
-                self.scope = .All
+                self.scope = .all
                 return true
             }
         }
@@ -528,9 +599,9 @@ open class Heimdall {
         
         static var allZeros: ScopeOptions { return self.init(0) }
         
-        static var PublicKey: ScopeOptions { return self.init(1 << 0) }
-        static var PrivateKey: ScopeOptions { return self.init(1 << 1) }
-        static var All: ScopeOptions           { return self.init(0b11) }
+        static var publicKey: ScopeOptions { return self.init(1 << 0) }
+        static var privateKey: ScopeOptions { return self.init(1 << 1) }
+        static var all: ScopeOptions           { return self.init(0b11) }
     }
     
     
@@ -538,9 +609,9 @@ open class Heimdall {
     //  MARK: Private helpers
     //
     fileprivate func obtainKey(_ key: KeyType) -> SecKey? {
-        if key == .public && self.scope & ScopeOptions.PublicKey == ScopeOptions.PublicKey {
+        if key == .public && self.scope & ScopeOptions.publicKey == ScopeOptions.publicKey {
             return Heimdall.obtainKey(self.publicTag)
-        } else if let tag = self.privateTag , key == .private && self.scope & ScopeOptions.PrivateKey == ScopeOptions.PrivateKey {
+        } else if let tag = self.privateTag , key == .private && self.scope & ScopeOptions.privateKey == ScopeOptions.privateKey {
             return Heimdall.obtainKey(tag)
         }
         
@@ -548,14 +619,15 @@ open class Heimdall {
     }
     
     fileprivate func obtainKeyData(_ key: KeyType) -> Data? {
-        if key == .public && self.scope & ScopeOptions.PublicKey == ScopeOptions.PublicKey {
+        if key == .public && self.scope & ScopeOptions.publicKey == ScopeOptions.publicKey {
             return Heimdall.obtainKeyData(self.publicTag)
-        } else if let tag = self.privateTag , key == .private && self.scope & ScopeOptions.PrivateKey == ScopeOptions.PrivateKey {
+        } else if let tag = self.privateTag , key == .private && self.scope & ScopeOptions.privateKey == ScopeOptions.privateKey {
             return Heimdall.obtainKeyData(tag)
         }
         
         return nil
     }
+
     
     //
     //  MARK: Private class functions
@@ -605,7 +677,30 @@ open class Heimdall {
         return result
     }
     
-    fileprivate class func updateKey(_ tag: String, data: Data) -> Bool {
+    private class func obtainKeyAttributes(tag: String) -> NSDictionary? {
+        var attrRef: AnyObject?
+        let query: Dictionary<String, AnyObject> = [
+            String(kSecAttrKeyType): kSecAttrKeyTypeRSA,
+            String(kSecReturnAttributes): kCFBooleanTrue as CFBoolean,
+            String(kSecClass): kSecClassKey as CFString,
+            String(kSecAttrApplicationTag): tag as CFString,
+            ]
+        
+        let result: NSDictionary?
+        
+        switch SecItemCopyMatching(query as CFDictionary, &attrRef) {
+        case noErr:
+            let cfDictionary = attrRef as! CFDictionary
+            result = cfDictionary as NSDictionary
+            
+        default:
+            result = nil
+        }
+        
+        return result
+    }
+    
+    private class func updateKey(tag: String, data: Data) -> Bool {
         let query: Dictionary<String, AnyObject> = [
             String(kSecAttrKeyType): kSecAttrKeyTypeRSA,
             String(kSecClass): kSecClassKey as CFString,
@@ -615,7 +710,17 @@ open class Heimdall {
         return SecItemUpdate(query as CFDictionary, [String(kSecValueData): data] as CFDictionary) == noErr
     }
     
-    fileprivate class func deleteKey(_ tag: String) -> Bool {
+    private class func updateKeyAttributes(tag: String, newAttributes: [String: AnyObject]) -> Bool {
+        
+        let query: Dictionary<String, AnyObject> = [
+            String(kSecAttrKeyType): kSecAttrKeyTypeRSA,
+            String(kSecClass): kSecClassKey as CFString,
+            String(kSecAttrApplicationTag): tag as CFString]
+        
+        return SecItemUpdate(query as CFDictionary, newAttributes as CFDictionary) == noErr
+    }
+    
+    private class func deleteKey(tag: String) -> Bool {
         let query: Dictionary<String, AnyObject> = [
             String(kSecAttrKeyType): kSecAttrKeyTypeRSA,
             String(kSecClass): kSecClassKey as CFString,
@@ -631,6 +736,7 @@ open class Heimdall {
         publicAttributes[String(kSecAttrApplicationTag)] = publicTag as CFString
         publicAttributes[String(kSecValueData)] = data as CFData
         publicAttributes[String(kSecReturnPersistentRef)] = true as CFBoolean
+        publicAttributes[String(kSecAttrAccessible)] = kSecAttrAccessibleAfterFirstUnlock
         
         var persistentRef: AnyObject?
         let status = SecItemAdd(publicAttributes as CFDictionary, &persistentRef)
@@ -642,17 +748,39 @@ open class Heimdall {
         return Heimdall.obtainKey(publicTag)
     }
     
-    
-    fileprivate class func generateKeyPair(_ publicTag: String, privateTag: String, keySize: Int) -> (publicKey: SecKey, privateKey: SecKey)? {
-        let privateAttributes = [String(kSecAttrIsPermanent): true,
-                                 String(kSecAttrApplicationTag): privateTag] as [String : Any]
-        let publicAttributes = [String(kSecAttrIsPermanent): true,
-                                String(kSecAttrApplicationTag): publicTag] as [String : Any]
+    private class func insertKey(tag: String, data: Data) -> SecKey? {
+        var publicAttributes = Dictionary<String, AnyObject>()
+        publicAttributes[String(kSecAttrKeyType)] = kSecAttrKeyTypeRSA
+        publicAttributes[String(kSecClass)] = kSecClassKey as CFString
+        publicAttributes[String(kSecAttrApplicationTag)] = tag as CFString
+        publicAttributes[String(kSecValueData)] = data as CFData
+        publicAttributes[String(kSecReturnPersistentRef)] = true as CFBoolean
+        publicAttributes[String(kSecAttrAccessible)] = kSecAttrAccessibleAfterFirstUnlock
         
-        let pairAttributes = [String(kSecAttrKeyType): kSecAttrKeyTypeRSA,
-                              String(kSecAttrKeySizeInBits): keySize,
-                              String(kSecPublicKeyAttrs): publicAttributes,
-                              String(kSecPrivateKeyAttrs): privateAttributes] as [String : Any]
+        var persistentRef: AnyObject?
+        let status = SecItemAdd(publicAttributes as CFDictionary, &persistentRef)
+        
+        if status != noErr && status != errSecDuplicateItem {
+            return nil
+        }
+        
+        return Heimdall.obtainKey(tag)
+    }
+    
+    
+    private class func generateKeyPair(publicTag: String, privateTag: String, keySize: Int) -> (publicKey: SecKey, privateKey: SecKey)? {
+        let privateAttributes: [String: AnyObject] = [String(kSecAttrIsPermanent): true as CFBoolean,
+                                 String(kSecAttrApplicationTag): privateTag as CFString,
+                                 String(kSecAttrAccessible): kSecAttrAccessibleAfterFirstUnlock]
+        let publicAttributes: [String: AnyObject] = [String(kSecAttrIsPermanent): true as CFBoolean,
+                                String(kSecAttrApplicationTag): publicTag as CFString,
+                                String(kSecAttrAccessible): kSecAttrAccessibleAfterFirstUnlock]
+        
+        let pairAttributes: [String: AnyObject] = [String(kSecAttrKeyType): kSecAttrKeyTypeRSA,
+                              String(kSecAttrKeySizeInBits): keySize as NSNumber,
+                              String(kSecPublicKeyAttrs): publicAttributes as CFDictionary,
+                              String(kSecPrivateKeyAttrs): privateAttributes as CFDictionary,
+                              String(kSecAttrAccessible): kSecAttrAccessibleAfterFirstUnlock]
         
         var publicRef: SecKey?
         var privateRef: SecKey?
@@ -744,7 +872,7 @@ open class Heimdall {
                 return result as Data
             }
         }
-
+        
         return nil
     }
 }
@@ -939,7 +1067,7 @@ private extension Data {
     
     func dataByStrippingX509Header() -> Data {
         var bytes = [CUnsignedChar](repeating: 0, count: self.count)
-        (self as NSData).getBytes(&bytes, length:self.count)
+        (self as Data).copyBytes(to: &bytes, count:self.count)
         
         var range = NSRange(location: 0, length: self.count)
         var offset = 0
