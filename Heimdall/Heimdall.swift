@@ -947,7 +947,7 @@ private extension NSInteger {
 ///
 /// Manipulating data
 ///
-private extension Data {
+public extension Data {
     init(modulus: Data, exponent: Data) {
         // Make sure neither the modulus nor the exponent start with a null byte
         var modulusBytes = [CUnsignedChar](UnsafeBufferPointer<CUnsignedChar>(start: (modulus as NSData).bytes.bindMemory(to: CUnsignedChar.self, capacity: modulus.count), count: modulus.count / MemoryLayout<CUnsignedChar>.size))
