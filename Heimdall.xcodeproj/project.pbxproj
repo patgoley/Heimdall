@@ -27,8 +27,6 @@
 
 /* Begin PBXFileReference section */
 		59B0020E1BE2D1410020EF3D /* Heimdall.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Heimdall.framework; sourceTree = BUILT_PRODUCTS_DIR; };
-		8E38307D1AFE176A007E4235 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		8E4C56031AFE17D3004FC935 /* CommonCrypto.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = CommonCrypto.xcconfig; sourceTree = "<group>"; };
 		8E866C541AE8FBEC005682A2 /* Heimdall.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Heimdall.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		8E866C581AE8FBEC005682A2 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		8E866C591AE8FBEC005682A2 /* Heimdall.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Heimdall.h; sourceTree = "<group>"; };
@@ -64,21 +62,11 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		8E38307B1AFE176A007E4235 /* CommonCrypto */ = {
-			isa = PBXGroup;
-			children = (
-				8E38307D1AFE176A007E4235 /* Info.plist */,
-				8E4C56031AFE17D3004FC935 /* CommonCrypto.xcconfig */,
-			);
-			path = CommonCrypto;
-			sourceTree = "<group>";
-		};
 		8E866C4A1AE8FBEC005682A2 = {
 			isa = PBXGroup;
 			children = (
 				8E866C561AE8FBEC005682A2 /* Heimdall */,
 				8E866C631AE8FBEC005682A2 /* HeimdallTests */,
-				8E38307B1AFE176A007E4235 /* CommonCrypto */,
 				8E866C551AE8FBEC005682A2 /* Products */,
 			);
 			sourceTree = "<group>";
